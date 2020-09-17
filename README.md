@@ -15,6 +15,7 @@ in Figma Desktop, and select the downloaded `manifest.json` file.
 - Open up this plugin
 - Specify a [frame name pattern](#frame-name-pattern)
 - Specify an [output path pattern](#output-path-pattern)
+- Check desired output formats
 - Click `Select` and wait till the list of selected frames appears down below
 - Make sure the list is correct
 - Click `Export` and wait
@@ -30,7 +31,7 @@ For instance, `^[0-9.]+ - ([A-Z]{2})$` will match frames `1.2.3 - EN` and `4.5 -
 
 ### Output path pattern
 
-A path within the ZIP archive with optional group references.
+A path within the ZIP archive (without extension) with optional group references.
 
 A group can be referenced by its index preceded by the dollar sign `$`.
 Group 0 is the full name of the frame.
