@@ -1,12 +1,16 @@
 type Settings = {
     frameNamePattern: string;
     outputPathPattern: string;
+    png: boolean;
+    jpg: boolean;
 };
 
 namespace SettingsManager {
     const DEFAULT: Settings = {
         frameNamePattern: '^.*$',
         outputPathPattern: '$0',
+        png: true,
+        jpg: false,
     };
     const FIELDS = Object.keys(DEFAULT);
     const CLIENT_STORAGE_PREFIX = 'HarryExporter.';
@@ -32,7 +36,7 @@ type Task = {
 };
 
 
-async function preparePlan(frameNamePattern: string, outputPathPattern: string): Promise<Task[]> {
+async function prepareTasks(frameNamePattern: string, outputPathPattern: string, formats: string[]): Promise<Task[]> {
     let frameNameRegExp: RegExp = null;
     try {
         frameNameRegExp = new RegExp(frameNamePattern);
@@ -40,7 +44,7 @@ async function preparePlan(frameNamePattern: string, outputPathPattern: string):
         throw {error: 'invalid regular expression `' + frameNamePattern + '`'};
     }
     const frameNodes = selectFrameNodes(frameNameRegExp);
-    const result = await Promise.all(frameNodes.map(node => prepareTask(node, frameNameRegExp, outputPathPattern)));
+    const result = frameNodes.flatMap(node => prepareNodeTasks(node, frameNameRegExp, outputPathPattern, formats));
     const paths = new Set<string>();
     result.forEach(({path}) => {
         if (paths.has(path)) {
@@ -56,22 +60,22 @@ function selectFrameNodes(frameNameRegExp: RegExp): DefaultFrameMixin[] {
     return figma.root.findAll(node => (node.type === 'COMPONENT' || node.type === 'FRAME' || node.type === 'INSTANCE') && frameNameRegExp.test(node.name)).map(node => node as DefaultFrameMixin);
 }
 
-async function prepareTask(node: DefaultFrameMixin, frameNameRegExp: RegExp, outputPathPattern: string): Promise<Task> {
+function prepareNodeTasks(node: DefaultFrameMixin, frameNameRegExp: RegExp, outputPathPattern: string, formats: string[]): Task[] {
     const matchArray = node.name.match(frameNameRegExp);
-    let path = outputPathPattern;
+    let pathPrefix = outputPathPattern;
     for (let i = matchArray.length - 1; i >= 0; --i) {
-        path = path.replace('$' + i, matchArray[i] || '');
+        pathPrefix = pathPrefix.replace('$' + i, matchArray[i] || '');
     }
-    return {nodeId: node.id, path};
+    return formats.map(format => ({nodeId: node.id, format, path: pathPrefix + '.' + format}));
 }
 
 async function exportAndSendBlob(task: Task): Promise<void> {
-    const blob = await (figma.getNodeById(task.nodeId) as DefaultFrameMixin).exportAsync({format: 'PNG'});
+    const blob = await (figma.getNodeById(task.nodeId) as DefaultFrameMixin).exportAsync({format: task.format.toUpperCase()});
     figma.ui.postMessage({type: 'blob', path: task.path, blob});
 }
 
 
-figma.showUI(__html__, {width: 300, height: 300});
+figma.showUI(__html__, {width: 320, height: 480});
 
 figma.ui.onmessage = async message => {
     if (message.type === 'load-settings') {
@@ -80,8 +84,9 @@ figma.ui.onmessage = async message => {
         figma.ui.postMessage({type: 'settings', settings});
     } else if (message.type === 'select') {
         await SettingsManager.save(message.settings);
-        const {frameNamePattern, outputPathPattern} = message.settings;
-        await preparePlan(frameNamePattern, outputPathPattern)
+        const {frameNamePattern, outputPathPattern, png, jpg} = message.settings;
+        const formats = (png ? ['png'] : []).concat(jpg ? ['jpg'] : []);
+        await prepareTasks(frameNamePattern, outputPathPattern, formats)
             .then(tasks => {
                 figma.ui.postMessage({type: 'tasks', tasks});
             })

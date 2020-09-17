@@ -402,6 +402,18 @@ https://github.com/nodeca/pako/blob/master/LICENSE
                 <input class="input" id="outputPathPattern" disabled/>
             </div>
         </div>
+        <div class="block">
+            <div class="row">
+                <div class="label">Formats</div>
+            </div>
+            <div class="row">
+                <div class="checkbox-wrapper"><input class="checkbox" type="checkbox" id="png" checked/></div>
+                <div class="label">PNG</div>
+                <div class="label">&nbsp;&nbsp;</div>
+                <div class="checkbox-wrapper"><input class="checkbox" type="checkbox" id="jpg"/></div>
+                <div class="label">JPG</div>
+            </div>
+        </div>
         <div class="block row" style="margin-top: 16px;">
             <button class="button button--secondary" id="select" disabled>Select</button>
             <button class="button button--primary" id="export" disabled>Export</button>
@@ -414,6 +426,8 @@ https://github.com/nodeca/pako/blob/master/LICENSE
 
         const frameNamePatternInput = document.getElementById('frameNamePattern');
         const outputPathPatternInput = document.getElementById('outputPathPattern');
+        const pngCheckbox = document.getElementById('png');
+        const jpgCheckbox = document.getElementById('jpg');
         const selectButton = document.getElementById('select');
         const exportButton = document.getElementById('export');
         const tasksContainer = document.getElementById('tasks');
@@ -426,11 +440,13 @@ https://github.com/nodeca/pako/blob/master/LICENSE
             const message = event.data.pluginMessage;
 
             if (message.type === 'settings') {
-                const {frameNamePattern, outputPathPattern} = message.settings;
+                const {frameNamePattern, outputPathPattern, png, jpg} = message.settings;
                 frameNamePatternInput.value = frameNamePattern;
                 frameNamePatternInput.disabled = false;
                 outputPathPatternInput.value = outputPathPattern;
                 outputPathPatternInput.disabled = false;
+                pngCheckbox.checked = png;
+                jpgCheckbox.checked = jpg;
                 selectButton.disabled = false;
             } else if (message.type === 'tasks') {
                 tasks = message.tasks;
@@ -449,7 +465,7 @@ https://github.com/nodeca/pako/blob/master/LICENSE
             }
         };
 
-        frameNamePatternInput.oninput = outputPathPatternInput.oninput = () => {
+        frameNamePatternInput.oninput = outputPathPatternInput.oninput = pngCheckbox.oninput = jpgCheckbox.oninput = () => {
             selectButton.disabled = false;
             exportButton.disabled = true;
             exportButton.innerText = 'Export';
@@ -462,7 +478,9 @@ https://github.com/nodeca/pako/blob/master/LICENSE
             outputPathPatternInput.disabled = true;
             const frameNamePattern = frameNamePatternInput.value;
             const outputPathPattern = outputPathPatternInput.value;
-            parent.postMessage({pluginMessage: {type: 'select', settings: {frameNamePattern, outputPathPattern}}}, '*');
+            const png = pngCheckbox.checked;
+            const jpg = jpgCheckbox.checked;
+            parent.postMessage({pluginMessage: {type: 'select', settings: {frameNamePattern, outputPathPattern, png, jpg}}}, '*');
         };
 
         exportButton.onclick = () => {

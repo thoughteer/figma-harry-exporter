@@ -12,6 +12,8 @@ var SettingsManager;
     const DEFAULT = {
         frameNamePattern: '^.*$',
         outputPathPattern: '$0',
+        png: true,
+        jpg: false,
     };
     const FIELDS = Object.keys(DEFAULT);
     const CLIENT_STORAGE_PREFIX = 'HarryExporter.';
@@ -34,7 +36,7 @@ var SettingsManager;
     SettingsManager.save = save;
 })(SettingsManager || (SettingsManager = {}));
 ;
-function preparePlan(frameNamePattern, outputPathPattern) {
+function prepareTasks(frameNamePattern, outputPathPattern, formats) {
     return __awaiter(this, void 0, void 0, function* () {
         let frameNameRegExp = null;
         try {
@@ -44,7 +46,7 @@ function preparePlan(frameNamePattern, outputPathPattern) {
             throw { error: 'invalid regular expression `' + frameNamePattern + '`' };
         }
         const frameNodes = selectFrameNodes(frameNameRegExp);
-        const result = yield Promise.all(frameNodes.map(node => prepareTask(node, frameNameRegExp, outputPathPattern)));
+        const result = frameNodes.flatMap(node => prepareNodeTasks(node, frameNameRegExp, outputPathPattern, formats));
         const paths = new Set();
         result.forEach(({ path }) => {
             if (paths.has(path)) {
@@ -59,23 +61,21 @@ function preparePlan(frameNamePattern, outputPathPattern) {
 function selectFrameNodes(frameNameRegExp) {
     return figma.root.findAll(node => (node.type === 'COMPONENT' || node.type === 'FRAME' || node.type === 'INSTANCE') && frameNameRegExp.test(node.name)).map(node => node);
 }
-function prepareTask(node, frameNameRegExp, outputPathPattern) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const matchArray = node.name.match(frameNameRegExp);
-        let path = outputPathPattern;
-        for (let i = matchArray.length - 1; i >= 0; --i) {
-            path = path.replace('$' + i, matchArray[i] || '');
-        }
-        return { nodeId: node.id, path };
-    });
+function prepareNodeTasks(node, frameNameRegExp, outputPathPattern, formats) {
+    const matchArray = node.name.match(frameNameRegExp);
+    let pathPrefix = outputPathPattern;
+    for (let i = matchArray.length - 1; i >= 0; --i) {
+        pathPrefix = pathPrefix.replace('$' + i, matchArray[i] || '');
+    }
+    return formats.map(format => ({ nodeId: node.id, format, path: pathPrefix + '.' + format }));
 }
 function exportAndSendBlob(task) {
     return __awaiter(this, void 0, void 0, function* () {
-        const blob = yield figma.getNodeById(task.nodeId).exportAsync({ format: 'PNG' });
+        const blob = yield figma.getNodeById(task.nodeId).exportAsync({ format: task.format.toUpperCase() });
         figma.ui.postMessage({ type: 'blob', path: task.path, blob });
     });
 }
-figma.showUI(__html__, { width: 300, height: 300 });
+figma.showUI(__html__, { width: 320, height: 480 });
 figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
     if (message.type === 'load-settings') {
         const settings = yield SettingsManager.load();
@@ -84,8 +84,9 @@ figma.ui.onmessage = (message) => __awaiter(this, void 0, void 0, function* () {
     }
     else if (message.type === 'select') {
         yield SettingsManager.save(message.settings);
-        const { frameNamePattern, outputPathPattern } = message.settings;
-        yield preparePlan(frameNamePattern, outputPathPattern)
+        const { frameNamePattern, outputPathPattern, png, jpg } = message.settings;
+        const formats = (png ? ['png'] : []).concat(jpg ? ['jpg'] : []);
+        yield prepareTasks(frameNamePattern, outputPathPattern, formats)
             .then(tasks => {
             figma.ui.postMessage({ type: 'tasks', tasks });
         })
